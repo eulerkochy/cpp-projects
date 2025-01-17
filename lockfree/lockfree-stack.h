@@ -36,7 +36,7 @@ public:
     {
       node_type *next = curr->m_next.load(mo::relaxed);
       delete curr;
-      m_tail.store(next, mo::relaxed);
+        m_tail.store(next, mo::relaxed);
     }
   }
 
@@ -47,7 +47,7 @@ public:
     do
     {
       thread_tail = m_tail.load(mo::relaxed);
-      latest->m_next.store(thread_tail, mo::release);
+      latest->m_next.store(thread_tail, mo::relaxed);
     } while (!m_tail.compare_exchange_weak(thread_tail, latest, mo::relaxed));
   }
 
@@ -58,26 +58,27 @@ public:
 
     do
     {
-      thread_tail = m_tail.load(mo::acquire);
+      thread_tail = m_tail.load(mo::relaxed);
       // the stack might be already empty
       if (thread_tail == nullptr)
       {
         return nullopt;
       }
-      next = thread_tail->m_next.load(mo::acquire);
-    } while (!m_tail.compare_exchange_weak(thread_tail, next, mo::acq_rel));
+      next = thread_tail->m_next.load(mo::relaxed);
+    } while (!m_tail.compare_exchange_weak(thread_tail, next, mo::relaxed));
 
     // some other thread might be here as well, how to prevent double deletion
+    // in multi-threaded deletion,
     auto data = thread_tail->m_data;
     if (data)
     {
       T value = *data;
       delete thread_tail;
       return value;
+    } else {
+        return nullopt;
     }
 
-    delete thread_tail;
-    return nullopt;
   }
 
   [[nodiscard]] bool empty() const
